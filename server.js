@@ -563,6 +563,8 @@ const cors = require('cors');
 const multer = require('multer');
 const dotenv = require('dotenv');
 const { uploadToS3 } = require('./config/awsConfig');
+const adminRoutes = require('./routes/admin.js');
+
 
 dotenv.config();
 
@@ -623,6 +625,8 @@ const upload = multer({
         else cb(new Error('Only image files are allowed!'));
     }
 });
+
+app.use('/api/admin', upload.none(), adminRoutes)
 
 // ---------------- POST: Create New Pothole ----------------
 app.post('/api/potholes', upload.single('image'), async (req, res) => {
