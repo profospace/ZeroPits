@@ -564,6 +564,9 @@ const multer = require('multer');
 const dotenv = require('dotenv');
 const { uploadToS3 } = require('./config/awsConfig');
 const adminRoutes = require('./routes/admin.js');
+// const adminAuthenticate = require('./middleware/adminAuthenticate.js');
+const subAdminRoutes = require('./routes/subAdmin');
+const { adminAuthenticate, requirePermission } = require('./middleware/adminAuthenticate');
 
 
 dotenv.config();
@@ -627,6 +630,7 @@ const upload = multer({
 });
 
 app.use('/api/admin', upload.none(), adminRoutes)
+app.use('/api/sub-admins', subAdminRoutes);
 
 // ---------------- POST: Create New Pothole ----------------
 app.post('/api/potholes', upload.single('image'), async (req, res) => {
@@ -689,18 +693,50 @@ app.get('/api/potholes/:id', async (req, res) => {
 });
 
 // ---------------- PUT: Update Pothole Status ----------------
-app.put('/api/potholes/:id', async (req, res) => {
+
+app.put('/api/potholes/:id', requirePermission('update'), adminAuthenticate, async (req, res) => {
     try {
-        const pothole = await Pothole.findByIdAndUpdate(req.params.id, { status: req.body.status }, { new: true });
-        if (!pothole) return res.status(404).json({ success: false, message: 'Not found' });
-        res.json({ success: true, message: 'Status updated', data: pothole });
+        const { status } = req.body;
+
+        // Optional: Validate status
+        const allowedStatuses = ["pending", "in-progress", "resolved"];
+        if (!allowedStatuses.includes(status)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid status value."
+            });
+        }
+
+        const pothole = await Pothole.findByIdAndUpdate(
+            req.params.id,
+            { status },
+            { new: true }
+        );
+
+        if (!pothole) {
+            return res.status(404).json({
+                success: false,
+                message: "Pothhole not found"
+            });
+        }
+
+        res.json({
+            success: true,
+            message: "Pothole status updated by admin",
+            data: pothole
+        });
+
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
     }
 });
 
+
 // ---------------- DELETE: Remove Pothole ----------------
-app.delete('/api/potholes/:id', async (req, res) => {
+app.delete('/api/potholes/:id', requirePermission('delete'), async (req, res) => {
     try {
         const pothole = await Pothole.findByIdAndDelete(req.params.id);
         if (!pothole) return res.status(404).json({ success: false, message: 'Not found' });

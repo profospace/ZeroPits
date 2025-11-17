@@ -3,6 +3,19 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 
+// const adminSchema = new mongoose.Schema({
+//     email: { type: String, required: true, unique: true },
+//     password: { type: String, required: true },
+//     isVerified: { type: Boolean, default: false },
+//     verifyToken: String,
+//     tokenExpiry: Date,
+
+//     resetPasswordToken: String,
+//     resetPasswordExpiry: Date,
+
+//     role: { type: String, default: 'admin' },
+// });
+
 const adminSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -13,8 +26,28 @@ const adminSchema = new mongoose.Schema({
     resetPasswordToken: String,
     resetPasswordExpiry: Date,
 
-    role: { type: String, default: 'admin' },
-});
+    // 🆕 ADD THESE FIELDS
+    role: {
+        type: String,
+        enum: ['super-admin', 'sub-admin'],
+        default: 'super-admin'
+    },
+    permissions: {
+        type: [String],
+        enum: ['create', 'read', 'update', 'delete'],
+        default: ['read'] // Sub-admins get read by default
+    },
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Admin',
+        default: null // null for super-admins
+    },
+    isActive: {
+        type: Boolean,
+        default: true
+    }
+}, { timestamps: true }); // 🆕 Add timestamps
+
 
 // 🔒 Hash password before save
 adminSchema.pre('save', async function (next) {

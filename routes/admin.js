@@ -91,74 +91,74 @@ router.post('/reset-password/:token', async (req, res) => {
 });
 
 // 🔐 Change password (for logged-in admin)
-router.put('/change-password', adminAuthenticate, async (req, res) => {
-    const { currentPassword, newPassword } = req.body;
+// router.put('/change-password', adminAuthenticate, async (req, res) => {
+//     const { currentPassword, newPassword } = req.body;
 
-    try {
-        // Validate new password
-        if (!newPassword || newPassword.length < 6) {
-            return res.status(400).json({
-                message: 'New password must be at least 6 characters long.'
-            });
-        }
+//     try {
+//         // Validate new password
+//         if (!newPassword || newPassword.length < 6) {
+//             return res.status(400).json({
+//                 message: 'New password must be at least 6 characters long.'
+//             });
+//         }
 
-        const admin = await Admin.findById(req.adminId);
+//         const admin = await Admin.findById(req.adminId);
 
-        // Verify current password
-        const isMatch = await admin.comparePassword(currentPassword);
-        if (!isMatch) {
-            return res.status(400).json({ message: 'Current password is incorrect.' });
-        }
+//         // Verify current password
+//         const isMatch = await admin.comparePassword(currentPassword);
+//         if (!isMatch) {
+//             return res.status(400).json({ message: 'Current password is incorrect.' });
+//         }
 
-        // Update password
-        admin.password = newPassword;
-        await admin.save();
+//         // Update password
+//         admin.password = newPassword;
+//         await admin.save();
 
-        res.status(200).json({ message: 'Password changed successfully.' });
-    } catch (error) {
-        console.error("Change password error:", error);
-        res.status(500).json({ message: 'Server error. Please try again.' });
-    }
-});
+//         res.status(200).json({ message: 'Password changed successfully.' });
+//     } catch (error) {
+//         console.error("Change password error:", error);
+//         res.status(500).json({ message: 'Server error. Please try again.' });
+//     }
+// });
 
-router.post('/auth', async (req, res) => {
-    const { email, password } = req.body;
-    console.log(req.body)
-    const allowedEmails = process.env.ALLOWED_ADMIN_EMAILS.split(',');
+// router.post('/auth', async (req, res) => {
+//     const { email, password } = req.body;
+//     console.log(req.body)
+//     const allowedEmails = process.env.ALLOWED_ADMIN_EMAILS.split(',');
 
-    if (!allowedEmails.includes(email)) {
-        return res.status(403).json({ message: 'Access denied.' });
-    }
+//     if (!allowedEmails.includes(email)) {
+//         return res.status(403).json({ message: 'Access denied.' });
+//     }
 
-    let admin = await Admin.findOne({ email });
+//     let admin = await Admin.findOne({ email });
 
-    // 🔁 Login flow
-    if (admin) {
-        const isMatch = await admin.comparePassword(password);
-        if (!isMatch) return res.status(400).json({ message: 'Wrong password.' });
+//     // 🔁 Login flow
+//     if (admin) {
+//         const isMatch = await admin.comparePassword(password);
+//         if (!isMatch) return res.status(400).json({ message: 'Wrong password.' });
 
-        if (!admin.isVerified)
-            return res.status(401).json({ message: 'Email not verified.' });
+//         if (!admin.isVerified)
+//             return res.status(401).json({ message: 'Email not verified.' });
 
-        const token = admin.generateJWT();
-        return res.status(200).json({
-            message: 'Login successful',
-            token,
-            admin: { email: admin.email, role: admin.role },
-        });
-    }
+//         const token = admin.generateJWT();
+//         return res.status(200).json({
+//             message: 'Login successful',
+//             token,
+//             admin: { email: admin.email, role: admin.role },
+//         });
+//     }
 
-    // 🆕 Register flow
-    admin = new Admin({ email, password });
-    const verifyToken = admin.generateEmailToken();
-    await admin.save();
+//     // 🆕 Register flow
+//     admin = new Admin({ email, password });
+//     const verifyToken = admin.generateEmailToken();
+//     await admin.save();
 
-    await sendVerificationEmail(email, verifyToken);
-    res.status(201).json({
-        message: 'Registered. Check your email to verify your account.',
-        redirectUrl: `${process.env.FRONTEND_URL}api/admin/verify-email/${verifyToken}`
-    });
-});
+//     await sendVerificationEmail(email, verifyToken);
+//     res.status(201).json({
+//         message: 'Registered. Check your email to verify your account.',
+//         redirectUrl: `${process.env.FRONTEND_URL}api/admin/verify-email/${verifyToken}`
+//     });
+// });
 
 
 // routes/admin.js - Update the verification endpoint
@@ -190,6 +190,64 @@ router.post('/auth', async (req, res) => {
 //         return res.status(500).send('Server error during verification');
 //     }
 // });
+
+// 🔄 UPDATE: Modify the /auth endpoint to handle sub-admin login
+router.post('/auth', async (req, res) => {
+    const { email, password } = req.body;
+    console.log(req.body);
+
+    let admin = await Admin.findOne({ email });
+
+    // 🔁 Login flow
+    if (admin) {
+        // 🆕 ADD: Check if sub-admin is active
+        if (admin.role === 'sub-admin' && !admin.isActive) {
+            return res.status(403).json({
+                message: 'Your account has been deactivated. Contact super admin.'
+            });
+        }
+
+        const isMatch = await admin.comparePassword(password);
+        if (!isMatch) return res.status(400).json({ message: 'Wrong password.' });
+
+        if (!admin.isVerified)
+            return res.status(401).json({ message: 'Email not verified.' });
+
+        const token = admin.generateJWT();
+        return res.status(200).json({
+            message: 'Login successful',
+            token,
+            admin: {
+                email: admin.email,
+                role: admin.role,
+                permissions: admin.permissions || [] // 🆕 ADD permissions
+            },
+        });
+    }
+
+    // 🆕 UPDATE: Only allow super-admin registration via allowed emails
+    const allowedEmails = process.env.ALLOWED_ADMIN_EMAILS.split(',');
+    if (!allowedEmails.includes(email)) {
+        return res.status(403).json({
+            message: 'Access denied. Contact super admin to create account.'
+        });
+    }
+
+    // 🆕 Register flow (only for super-admins)
+    admin = new Admin({
+        email,
+        password,
+        role: 'super-admin' // 🆕 Explicitly set role
+    });
+    const verifyToken = admin.generateEmailToken();
+    await admin.save();
+
+    await sendVerificationEmail(email, verifyToken);
+    res.status(201).json({
+        message: 'Registered. Check your email to verify your account.',
+        redirectUrl: `${process.env.FRONTEND_URL}api/admin/verify-email/${verifyToken}`
+    });
+});
 
 // REPLACE THE ENTIRE /verify-email/:token ROUTE WITH:
 router.get('/verify-email/:token', async (req, res) => {
