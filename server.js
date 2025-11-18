@@ -567,6 +567,7 @@ const adminRoutes = require('./routes/admin.js');
 // const adminAuthenticate = require('./middleware/adminAuthenticate.js');
 const subAdminRoutes = require('./routes/subAdmin');
 const { adminAuthenticate, requirePermission } = require('./middleware/adminAuthenticate');
+const authRoutes = require('./routes/auth');
 
 
 dotenv.config();
@@ -576,6 +577,7 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI, {
@@ -629,6 +631,7 @@ const upload = multer({
     }
 });
 
+app.use('/api/auth', authRoutes); //user Auth
 app.use('/api/admin', upload.none(), adminRoutes)
 app.use('/api/sub-admins', subAdminRoutes);
 
