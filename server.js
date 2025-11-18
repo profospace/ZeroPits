@@ -694,7 +694,7 @@ app.get('/api/potholes/:id', async (req, res) => {
 
 // ---------------- PUT: Update Pothole Status ----------------
 
-app.put('/api/potholes/:id', requirePermission('update'), adminAuthenticate, async (req, res) => {
+app.put('/api/potholes/:id', adminAuthenticate , requirePermission('update'), async (req, res) => {
     try {
         const { status } = req.body;
 
@@ -767,3 +767,7 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 Server running on port ${PORT}`);
 });
+
+// local
+// deadpool@gmail.com
+// 81b7d122066e42da

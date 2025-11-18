@@ -109,20 +109,44 @@ const requireSuperAdmin = (req, res, next) => {
 };
 
 // 🆕 ADD THIS - Check specific permission
+// const requirePermission = (permission) => {
+//     console.log("permission", permission)
+//     return (req, res, next) => {
+//         if (req.adminRole === 'super-admin') {
+//             return next(); // Super admin has all permissions
+//         }
+
+//         if (!req.adminPermissions.includes(permission)) {
+//             return res.status(403).json({
+//                 message: `Access denied. Missing '${permission}' permission.`
+//             });
+//         }
+//         next();
+//     };
+// };
+
 const requirePermission = (permission) => {
     return (req, res, next) => {
-        if (req.adminRole === 'super-admin') {
-            return next(); // Super admin has all permissions
+        console.log("permission", permission)
+        // Super admin always allowed
+        if (req.adminRole == 'super-admin') {
+            return next();
         }
 
-        if (!req.adminPermissions.includes(permission)) {
+        console.log(" req.adminPermissions", req.adminPermissions)
+        // FIX 🔥 → Ensure permissions always exists
+        const permissions = req.adminPermissions || [];
+
+        if (!permissions.includes(permission)) {
             return res.status(403).json({
                 message: `Access denied. Missing '${permission}' permission.`
             });
         }
+
         next();
     };
 };
+
 
 module.exports = {
     adminAuthenticate,

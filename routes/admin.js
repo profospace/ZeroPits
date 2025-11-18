@@ -192,6 +192,64 @@ router.post('/reset-password/:token', async (req, res) => {
 // });
 
 // 🔄 UPDATE: Modify the /auth endpoint to handle sub-admin login
+// router.post('/auth', async (req, res) => {
+//     const { email, password } = req.body;
+//     console.log(req.body);
+
+//     let admin = await Admin.findOne({ email });
+
+//     // 🔁 Login flow
+//     if (admin) {
+//         // 🆕 ADD: Check if sub-admin is active
+//         if (admin.role === 'sub-admin' && !admin.isActive) {
+//             return res.status(403).json({
+//                 message: 'Your account has been deactivated. Contact super admin.'
+//             });
+//         }
+
+//         const isMatch = await admin.comparePassword(password);
+//         if (!isMatch) return res.status(400).json({ message: 'Wrong password.' });
+
+//         if (!admin.isVerified)
+//             return res.status(401).json({ message: 'Email not verified.' });
+
+//         const token = admin.generateJWT();
+//         return res.status(200).json({
+//             message: 'Login successful',
+//             token,
+//             admin: {
+//                 email: admin.email,
+//                 role: admin.role,
+//                 permissions: admin.permissions || [] // 🆕 ADD permissions
+//             },
+//         });
+//     }
+
+//     // 🆕 UPDATE: Only allow super-admin registration via allowed emails
+//     const allowedEmails = process.env.ALLOWED_ADMIN_EMAILS.split(',');
+//     if (!allowedEmails.includes(email)) {
+//         return res.status(403).json({
+//             message: 'Access denied. Contact super admin to create account.'
+//         });
+//     }
+
+//     // 🆕 Register flow (only for super-admins)
+//     admin = new Admin({
+//         email,
+//         password,
+//         role: 'super-admin' // 🆕 Explicitly set role
+//     });
+//     const verifyToken = admin.generateEmailToken();
+//     await admin.save();
+
+//     await sendVerificationEmail(email, verifyToken);
+//     res.status(201).json({
+//         message: 'Registered. Check your email to verify your account.',
+//         redirectUrl: `${process.env.FRONTEND_URL}api/admin/verify-email/${verifyToken}`
+//     });
+// });
+
+// 🔄 UPDATE: Modify the /auth endpoint to handle sub-admin + auto super-admin creation
 router.post('/auth', async (req, res) => {
     const { email, password } = req.body;
     console.log(req.body);
@@ -200,19 +258,24 @@ router.post('/auth', async (req, res) => {
 
     // 🔁 Login flow
     if (admin) {
-        // 🆕 ADD: Check if sub-admin is active
+
+        // Check if sub-admin is deactivated
         if (admin.role === 'sub-admin' && !admin.isActive) {
             return res.status(403).json({
                 message: 'Your account has been deactivated. Contact super admin.'
             });
         }
 
+        // Check password
         const isMatch = await admin.comparePassword(password);
-        if (!isMatch) return res.status(400).json({ message: 'Wrong password.' });
+        if (!isMatch)
+            return res.status(400).json({ message: 'Wrong password.' });
 
+        // Check email verification
         if (!admin.isVerified)
             return res.status(401).json({ message: 'Email not verified.' });
 
+        // Generate token
         const token = admin.generateJWT();
         return res.status(200).json({
             message: 'Login successful',
@@ -220,34 +283,46 @@ router.post('/auth', async (req, res) => {
             admin: {
                 email: admin.email,
                 role: admin.role,
-                permissions: admin.permissions || [] // 🆕 ADD permissions
-            },
+                permissions: admin.permissions || []
+            }
         });
     }
 
-    // 🆕 UPDATE: Only allow super-admin registration via allowed emails
+
+    // -----------------------------------------
+    // 🆕 SUPER-ADMIN AUTO REGISTRATION LOGIC
+    // -----------------------------------------
+
     const allowedEmails = process.env.ALLOWED_ADMIN_EMAILS.split(',');
-    if (!allowedEmails.includes(email)) {
-        return res.status(403).json({
-            message: 'Access denied. Contact super admin to create account.'
+
+    // If email is allowed → auto-create SUPER ADMIN with full permissions
+    if (allowedEmails.includes(email)) {
+
+        admin = new Admin({
+            email,
+            password,
+            role: 'super-admin',
+            permissions: ['create', 'read', 'update', 'delete'], // FULL PERMISSIONS
+            createdBy: null
+        });
+
+        const verifyToken = admin.generateEmailToken();
+        await admin.save();
+
+        await sendVerificationEmail(email, verifyToken);
+
+        return res.status(201).json({
+            message: 'Super Admin registered. Check your email to verify your account.',
+            redirectUrl: `${process.env.FRONTEND_URL}api/admin/verify-email/${verifyToken}`
         });
     }
 
-    // 🆕 Register flow (only for super-admins)
-    admin = new Admin({
-        email,
-        password,
-        role: 'super-admin' // 🆕 Explicitly set role
-    });
-    const verifyToken = admin.generateEmailToken();
-    await admin.save();
-
-    await sendVerificationEmail(email, verifyToken);
-    res.status(201).json({
-        message: 'Registered. Check your email to verify your account.',
-        redirectUrl: `${process.env.FRONTEND_URL}api/admin/verify-email/${verifyToken}`
+    // ❌ Email NOT ALLOWED → Block registration
+    return res.status(403).json({
+        message: 'Registration denied. Only allowed super admin emails can register.'
     });
 });
+
 
 // REPLACE THE ENTIRE /verify-email/:token ROUTE WITH:
 router.get('/verify-email/:token', async (req, res) => {

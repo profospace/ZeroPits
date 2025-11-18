@@ -3,18 +3,6 @@ const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 
-// const adminSchema = new mongoose.Schema({
-//     email: { type: String, required: true, unique: true },
-//     password: { type: String, required: true },
-//     isVerified: { type: Boolean, default: false },
-//     verifyToken: String,
-//     tokenExpiry: Date,
-
-//     resetPasswordToken: String,
-//     resetPasswordExpiry: Date,
-
-//     role: { type: String, default: 'admin' },
-// });
 
 const adminSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
