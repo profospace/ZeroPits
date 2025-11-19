@@ -568,6 +568,8 @@ const adminRoutes = require('./routes/admin.js');
 const subAdminRoutes = require('./routes/subAdmin');
 const { adminAuthenticate, requirePermission } = require('./middleware/adminAuthenticate');
 const authRoutes = require('./routes/auth');
+const authMiddleware = require('./middleware/auth'); // Import at top
+const bodyParser = require('body-parser');
 
 
 dotenv.config();
@@ -579,6 +581,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
+
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
@@ -589,7 +594,9 @@ mongoose.connect(process.env.MONGODB_URI, {
 
 // ---------------- Pothole Schema ----------------
 const potholeSchema = new mongoose.Schema({
-    image: String,
+    // image: String,
+    images: [String], // CHANGE: Array of image URLs instead of single image
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, 
     location: {
         latitude: Number,
         longitude: Number,
@@ -624,7 +631,7 @@ const Pothole = mongoose.model('Pothole', potholeSchema);
 const storage = multer.memoryStorage();
 const upload = multer({
     storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    limits: { fileSize: 50 * 1024 * 1024 }, // 5MB
     fileFilter: (req, file, cb) => {
         if (file.mimetype.startsWith('image/')) cb(null, true);
         else cb(new Error('Only image files are allowed!'));
@@ -636,20 +643,67 @@ app.use('/api/admin', upload.none(), adminRoutes)
 app.use('/api/sub-admins', subAdminRoutes);
 
 // ---------------- POST: Create New Pothole ----------------
-app.post('/api/potholes', upload.single('image'), async (req, res) => {
+// app.post('/api/potholes', upload.single('image'), async (req, res) => {
+//     try {
+//         const { latitude, longitude, address, severity, position, description, reportedBy } = req.body;
+
+//         if (!req.file) {
+//             return res.status(400).json({ success: false, message: 'Image is required' });
+//         }
+
+//         // Upload image to S3
+//         const fileName = `potholes/${Date.now()}_${req.file.originalname}`;
+//         const imageUrl = await uploadToS3(req.file.buffer, fileName, req.file.mimetype);
+
+//         const pothole = new Pothole({
+//             image: imageUrl,
+//             location: {
+//                 latitude: parseFloat(latitude),
+//                 longitude: parseFloat(longitude),
+//                 address: address || 'Unknown location'
+//             },
+//             severity,
+//             position,
+//             description,
+//             reportedBy: reportedBy || 'Anonymous'
+//         });
+
+//         await pothole.save();
+
+//         res.status(201).json({
+//             success: true,
+//             message: '✅ Pothole reported successfully',
+//             data: pothole
+//         });
+//     } catch (error) {
+//         console.error('❌ Error creating pothole:', error);
+//         res.status(500).json({ success: false, message: error.message });
+//     }
+// });
+
+
+// CHANGE: Add authMiddleware to the route
+
+// REPLACE: app.post('/api/potholes', upload.single('image'), async (req, res) => {
+app.post('/api/potholes', authMiddleware, upload.array('images', 3), async (req, res) => {
     try {
         const { latitude, longitude, address, severity, position, description, reportedBy } = req.body;
 
-        if (!req.file) {
-            return res.status(400).json({ success: false, message: 'Image is required' });
+        // CHANGE: Check for files (plural)
+        if (!req.files || req.files.length === 0) {
+            return res.status(400).json({ success: false, message: 'At least one image is required' });
         }
 
-        // Upload image to S3
-        const fileName = `potholes/${Date.now()}_${req.file.originalname}`;
-        const imageUrl = await uploadToS3(req.file.buffer, fileName, req.file.mimetype);
+        // CHANGE: Upload multiple images to S3
+        const imageUrls = await Promise.all(
+            req.files.map(file => {
+                const fileName = `potholes/${Date.now()}_${file.originalname}`;
+                return uploadToS3(file.buffer, fileName, file.mimetype);
+            })
+        );
 
         const pothole = new Pothole({
-            image: imageUrl,
+            images: imageUrls, // CHANGE: Use 'images' array instead of 'image'
             location: {
                 latitude: parseFloat(latitude),
                 longitude: parseFloat(longitude),
@@ -658,7 +712,8 @@ app.post('/api/potholes', upload.single('image'), async (req, res) => {
             severity,
             position,
             description,
-            reportedBy: reportedBy || 'Anonymous'
+            reportedBy: req.user.phone || reportedBy || 'Anonymous', // CHANGE: Use authenticated user
+            userId: req.user.id // ADD: Store user ID
         });
 
         await pothole.save();

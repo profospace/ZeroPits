@@ -201,12 +201,12 @@ router.post('/request-otp', async (req, res) => {
         user.otp = { code, expiresAt };
         await user.save();
 
-        // console.log("code", code)
+        console.log("code", code)
         // Send OTP via SMS
         const message = `Your verification code is ${code}. Valid for ${OTP_TTL_MIN} minutes. Do not share this code.`;
 
         try {
-            // await sendSms(phone, message);
+            await sendSms(phone, message);
 
             return res.json({
                 ok: true,
