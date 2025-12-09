@@ -7,66 +7,69 @@ const adminAuthenticate = require('../middleware/adminAuthenticate');
 
 const router = express.Router();
 
-// const sendPasswordResetEmail = require('../utils/sendVerificationEmail');
-
 
 // 📧 Request password reset
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
-    console.log("Password reset request for:", email);
+    console.log("[🔐 FORGOT-PASS] Request received for:", email);
 
     try {
         const admin = await Admin.findOne({ email });
+        console.log("[🔍 DB SEARCH] Admin found?", !!admin);
 
         if (!admin) {
-            // Don't reveal if email exists or not for security
+            console.log("[⚠️ NO USER] Not revealing existence.");
             return res.status(200).json({
                 message: 'If that email exists, a password reset link has been sent.'
             });
         }
 
-        // Check if admin is verified
         if (!admin.isVerified) {
+            console.log("[⛔ NOT VERIFIED] Email must be verified.");
             return res.status(403).json({
                 message: 'Please verify your email first.'
             });
         }
 
-        // Generate reset token
+        console.log("[🔑 GENERATING TOKEN]");
         const resetToken = admin.generatePasswordResetToken();
         await admin.save();
+        console.log("[📨 EMAIL] Sending password reset email...");
 
-        // Send reset email
         await sendPasswordResetEmail(email, resetToken);
 
+        console.log("[✔️ SUCCESS] Password reset email sent.");
         res.status(200).json({
             message: 'Password reset link sent to your email.'
         });
     } catch (error) {
-        console.error("Forgot password error:", error);
+        console.error("[💥 ERROR - FORGOT PASSWORD]", error);
         res.status(500).json({ message: 'Server error. Please try again.' });
     }
 });
+
 
 // 🔑 Reset password with token
 router.post('/reset-password/:token', async (req, res) => {
     const { token } = req.params;
     const { password } = req.body;
-    console.log("Password reset attempt with token");
+    console.log("[🔑 RESET-PASS] Token received:", token);
 
     try {
-        // Validate password
         if (!password || password.length < 6) {
+            console.log("[❌ INVALID PASSWORD]");
             return res.status(400).json({
                 message: 'Password must be at least 6 characters long.'
             });
         }
 
-        // Find admin with valid reset token
+        console.log("[🔍 DB SEARCH] Checking reset token validity...");
         const admin = await Admin.findOne({
             resetPasswordToken: token,
             resetPasswordExpiry: { $gt: Date.now() },
         });
+
+        console.log("[TOKEN VALID?]", !!admin);
 
         if (!admin) {
             return res.status(400).json({
@@ -74,209 +77,57 @@ router.post('/reset-password/:token', async (req, res) => {
             });
         }
 
-        // Update password
-        admin.password = password; // Will be hashed by pre-save hook
+        console.log("[🔒 UPDATING PASSWORD]");
+        admin.password = password;
         admin.resetPasswordToken = undefined;
         admin.resetPasswordExpiry = undefined;
         await admin.save();
 
-        console.log("Password reset successful for:", admin.email);
+        console.log("[✔️ SUCCESS] Password updated for:", admin.email);
         res.status(200).json({
             message: 'Password reset successful. You can now login with your new password.'
         });
     } catch (error) {
-        console.error("Reset password error:", error);
+        console.error("[💥 ERROR - RESET PASSWORD]", error);
         res.status(500).json({ message: 'Server error. Please try again.' });
     }
 });
 
-// 🔐 Change password (for logged-in admin)
-// router.put('/change-password', adminAuthenticate, async (req, res) => {
-//     const { currentPassword, newPassword } = req.body;
 
-//     try {
-//         // Validate new password
-//         if (!newPassword || newPassword.length < 6) {
-//             return res.status(400).json({
-//                 message: 'New password must be at least 6 characters long.'
-//             });
-//         }
-
-//         const admin = await Admin.findById(req.adminId);
-
-//         // Verify current password
-//         const isMatch = await admin.comparePassword(currentPassword);
-//         if (!isMatch) {
-//             return res.status(400).json({ message: 'Current password is incorrect.' });
-//         }
-
-//         // Update password
-//         admin.password = newPassword;
-//         await admin.save();
-
-//         res.status(200).json({ message: 'Password changed successfully.' });
-//     } catch (error) {
-//         console.error("Change password error:", error);
-//         res.status(500).json({ message: 'Server error. Please try again.' });
-//     }
-// });
-
-// router.post('/auth', async (req, res) => {
-//     const { email, password } = req.body;
-//     console.log(req.body)
-//     const allowedEmails = process.env.ALLOWED_ADMIN_EMAILS.split(',');
-
-//     if (!allowedEmails.includes(email)) {
-//         return res.status(403).json({ message: 'Access denied.' });
-//     }
-
-//     let admin = await Admin.findOne({ email });
-
-//     // 🔁 Login flow
-//     if (admin) {
-//         const isMatch = await admin.comparePassword(password);
-//         if (!isMatch) return res.status(400).json({ message: 'Wrong password.' });
-
-//         if (!admin.isVerified)
-//             return res.status(401).json({ message: 'Email not verified.' });
-
-//         const token = admin.generateJWT();
-//         return res.status(200).json({
-//             message: 'Login successful',
-//             token,
-//             admin: { email: admin.email, role: admin.role },
-//         });
-//     }
-
-//     // 🆕 Register flow
-//     admin = new Admin({ email, password });
-//     const verifyToken = admin.generateEmailToken();
-//     await admin.save();
-
-//     await sendVerificationEmail(email, verifyToken);
-//     res.status(201).json({
-//         message: 'Registered. Check your email to verify your account.',
-//         redirectUrl: `${process.env.FRONTEND_URL}api/admin/verify-email/${verifyToken}`
-//     });
-// });
-
-
-// routes/admin.js - Update the verification endpoint
-// router.get('/verify-email/:token', async (req, res) => {
-//     const { token } = req.params;
-//     console.log("Verification token received:", token);
-
-//     try {
-//         const admin = await Admin.findOne({
-//             verifyToken: token,
-//             tokenExpiry: { $gt: Date.now() }, // token still valid
-//         });
-
-//         if (!admin) {
-//             console.log("Invalid token or token expired");
-//             return res.status(400).send('Invalid or expired token');
-//         }
-
-//         // Update admin to verified status
-//         admin.isVerified = true;
-//         admin.verifyToken = undefined;
-//         admin.tokenExpiry = undefined;
-//         await admin.save();
-
-//         console.log("Email verified successfully for:", admin.email);
-//         return res.status(200).send('Email verified successfully! You can now login.');
-//     } catch (error) {
-//         console.error("Verification error:", error);
-//         return res.status(500).send('Server error during verification');
-//     }
-// });
-
-// 🔄 UPDATE: Modify the /auth endpoint to handle sub-admin login
-// router.post('/auth', async (req, res) => {
-//     const { email, password } = req.body;
-//     console.log(req.body);
-
-//     let admin = await Admin.findOne({ email });
-
-//     // 🔁 Login flow
-//     if (admin) {
-//         // 🆕 ADD: Check if sub-admin is active
-//         if (admin.role === 'sub-admin' && !admin.isActive) {
-//             return res.status(403).json({
-//                 message: 'Your account has been deactivated. Contact super admin.'
-//             });
-//         }
-
-//         const isMatch = await admin.comparePassword(password);
-//         if (!isMatch) return res.status(400).json({ message: 'Wrong password.' });
-
-//         if (!admin.isVerified)
-//             return res.status(401).json({ message: 'Email not verified.' });
-
-//         const token = admin.generateJWT();
-//         return res.status(200).json({
-//             message: 'Login successful',
-//             token,
-//             admin: {
-//                 email: admin.email,
-//                 role: admin.role,
-//                 permissions: admin.permissions || [] // 🆕 ADD permissions
-//             },
-//         });
-//     }
-
-//     // 🆕 UPDATE: Only allow super-admin registration via allowed emails
-//     const allowedEmails = process.env.ALLOWED_ADMIN_EMAILS.split(',');
-//     if (!allowedEmails.includes(email)) {
-//         return res.status(403).json({
-//             message: 'Access denied. Contact super admin to create account.'
-//         });
-//     }
-
-//     // 🆕 Register flow (only for super-admins)
-//     admin = new Admin({
-//         email,
-//         password,
-//         role: 'super-admin' // 🆕 Explicitly set role
-//     });
-//     const verifyToken = admin.generateEmailToken();
-//     await admin.save();
-
-//     await sendVerificationEmail(email, verifyToken);
-//     res.status(201).json({
-//         message: 'Registered. Check your email to verify your account.',
-//         redirectUrl: `${process.env.FRONTEND_URL}api/admin/verify-email/${verifyToken}`
-//     });
-// });
-
-// 🔄 UPDATE: Modify the /auth endpoint to handle sub-admin + auto super-admin creation
+// 🔄 LOGIN + AUTO ADMIN REGISTRATION
 router.post('/auth', async (req, res) => {
     const { email, password } = req.body;
-    console.log(req.body);
+    console.log("[🆔 AUTH REQUEST]", req.body);
 
     let admin = await Admin.findOne({ email });
+    console.log("[🔍 DB SEARCH] Admin exists?", !!admin);
 
-    // 🔁 Login flow
+    // Login flow
     if (admin) {
+        console.log("[LOGIN FLOW] Existing admin:", admin.role);
 
-        // Check if sub-admin is deactivated
         if (admin.role === 'sub-admin' && !admin.isActive) {
+            console.log("[⛔ BLOCKED] Sub-admin inactive");
             return res.status(403).json({
                 message: 'Your account has been deactivated. Contact super admin.'
             });
         }
 
-        // Check password
+        console.log("[🧪 PASSWORD CHECK]");
         const isMatch = await admin.comparePassword(password);
-        if (!isMatch)
-            return res.status(400).json({ message: 'Wrong password.' });
+        console.log("[MATCH?]", isMatch);
 
-        // Check email verification
-        if (!admin.isVerified)
+        if (!isMatch) return res.status(400).json({ message: 'Wrong password.' });
+
+        if (!admin.isVerified) {
+            console.log("[⛔ EMAIL NOT VERIFIED]");
             return res.status(401).json({ message: 'Email not verified.' });
+        }
 
-        // Generate token
+        console.log("[🎫 GENERATING JWT]");
         const token = admin.generateJWT();
+        console.log("[✔️ LOGIN SUCCESS] User:", admin.email);
+
         return res.status(200).json({
             message: 'Login successful',
             token,
@@ -289,25 +140,24 @@ router.post('/auth', async (req, res) => {
     }
 
 
-    // -----------------------------------------
-    // 🆕 SUPER-ADMIN AUTO REGISTRATION LOGIC
-    // -----------------------------------------
-
+    // SUPER-ADMIN AUTO REGISTRATION
     const allowedEmails = process.env.ALLOWED_ADMIN_EMAILS.split(',');
+    console.log("[🔐 ALLOWED EMAILS]", allowedEmails);
 
-    // If email is allowed → auto-create SUPER ADMIN with full permissions
     if (allowedEmails.includes(email)) {
+        console.log("[🆕 AUTO SUPER ADMIN REGISTRATION]");
 
         admin = new Admin({
             email,
             password,
             role: 'super-admin',
-            permissions: ['create', 'read', 'update', 'delete'], // FULL PERMISSIONS
+            permissions: ['create', 'read', 'update', 'delete'],
             createdBy: null
         });
 
         const verifyToken = admin.generateEmailToken();
         await admin.save();
+        console.log("[📨 EMAIL] Verification email sent");
 
         await sendVerificationEmail(email, verifyToken);
 
@@ -317,17 +167,17 @@ router.post('/auth', async (req, res) => {
         });
     }
 
-    // ❌ Email NOT ALLOWED → Block registration
+    console.log("[⛔ REGISTRATION DENIED] Not in allowed email list");
     return res.status(403).json({
         message: 'Registration denied. Only allowed super admin emails can register.'
     });
 });
 
 
-// REPLACE THE ENTIRE /verify-email/:token ROUTE WITH:
+// 📩 EMAIL VERIFICATION
 router.get('/verify-email/:token', async (req, res) => {
     const { token } = req.params;
-    console.log("Verification token received:", token);
+    console.log("[📧 VERIFY EMAIL] Token:", token);
 
     try {
         const admin = await Admin.findOne({
@@ -335,9 +185,10 @@ router.get('/verify-email/:token', async (req, res) => {
             tokenExpiry: { $gt: Date.now() },
         });
 
+        console.log("[TOKEN VALID?]", !!admin);
+
         if (!admin) {
-            console.log("Invalid token or token expired");
-            // Return JSON instead of HTML
+            console.log("[❌ INVALID/EXPIRED TOKEN]");
             return res.status(400).json({
                 success: false,
                 message: 'Invalid or expired token'
@@ -349,21 +200,19 @@ router.get('/verify-email/:token', async (req, res) => {
         admin.tokenExpiry = undefined;
         await admin.save();
 
-        console.log("Email verified successfully for:", admin.email);
+        console.log("[✔️ EMAIL VERIFIED] User:", admin.email);
 
-        // Return JSON response
         return res.status(200).json({
             success: true,
             message: 'Email verified successfully! You can now login.'
         });
     } catch (error) {
-        console.error("Verification error:", error);
+        console.error("[💥 ERROR - VERIFY EMAIL]", error);
         return res.status(500).json({
             success: false,
             message: 'Server error during verification'
         });
     }
 });
-
 
 module.exports = router;
