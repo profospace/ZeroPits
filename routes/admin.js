@@ -8,6 +8,60 @@ const adminAuthenticate = require('../middleware/adminAuthenticate');
 const router = express.Router();
 
 
+router.post('/create-super-admin', async (req, res) => {
+  try {
+    const { secret, email, password, phone } = req.body;
+
+    // 🔐 Environment-level protection
+    if (secret !== process.env.SUPER_ADMIN_SECRET) {
+      return res.status(403).json({
+        success: false,
+        message: 'Invalid secret'
+      });
+    }
+
+    const existing = await Admin.findOne({ role: 'super-admin' });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: 'Super Admin already exists'
+      });
+    }
+
+    const superAdmin = new Admin({
+      email,
+      password,
+      phone,
+      role: 'super-admin',
+      permissions: [
+        'create',
+        'read',
+        'update',
+        'delete',
+        'manage-admins',
+        'manage-sub-admins'
+      ],
+      isVerified: true
+    });
+
+    await superAdmin.save();
+
+    res.status(201).json({
+      success: true,
+      message: '✅ Super Admin created successfully'
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+});
+
+
+
+
 // 📧 Request password reset
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
