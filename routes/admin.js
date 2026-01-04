@@ -33,15 +33,18 @@ router.post('/create-super-admin', async (req, res) => {
       password,
       phone,
       role: 'super-admin',
-      permissions: [
-        'create',
-        'read',
-        'update',
-        'delete',
-        'manage-admins',
-        'manage-sub-admins'
-      ],
-      isVerified: true
+     permissions: {
+  type: [String],
+  enum: [
+    'create',
+    'read',
+    'update',
+    'delete',
+    'manage-admins',
+    'manage-sub-admins'
+  ],
+  default: ['read']
+}
     });
 
     await superAdmin.save();
