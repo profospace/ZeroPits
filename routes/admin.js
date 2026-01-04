@@ -48,8 +48,8 @@ router.post('/create-super-admin', async (req, res) => {
             }
         });
 
-        console.log('permissions payload:', permissions);
-console.log('permissions[0] type:', typeof permissions[0]);
+//         console.log('permissions payload:', permissions);
+// console.log('permissions[0] type:', typeof permissions[0]);
 
         await superAdmin.save();
 
