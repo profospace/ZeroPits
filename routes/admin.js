@@ -40,16 +40,12 @@ router.post('/create-super-admin', async (req, res) => {
             password,
             phone,
             role: 'super-admin',
-            permissions: {
-                type: [String],
-                permissions: PERMISSIONS, // ✅ array of strings
-
-                default: ['read']
-            }
+            permissions: PERMISSIONS, // ✅ ARRAY OF STRINGS
+            isVerified: true
         });
 
-//         console.log('permissions payload:', permissions);
-// console.log('permissions[0] type:', typeof permissions[0]);
+        //         console.log('permissions payload:', permissions);
+        // console.log('permissions[0] type:', typeof permissions[0]);
 
         await superAdmin.save();
 
