@@ -7,59 +7,63 @@ const adminAuthenticate = require('../middleware/adminAuthenticate');
 
 const router = express.Router();
 
-
-router.post('/create-super-admin', async (req, res) => {
-  try {
-    const { secret, email, password, phone } = req.body;
-
-    // 🔐 Environment-level protection
-    if (secret !== process.env.SUPER_ADMIN_SECRET) {
-      return res.status(403).json({
-        success: false,
-        message: 'Invalid secret'
-      });
-    }
-
-    const existing = await Admin.findOne({ role: 'super-admin' });
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: 'Super Admin already exists'
-      });
-    }
-
-    const superAdmin = new Admin({
-      email,
-      password,
-      phone,
-      role: 'super-admin',
-     permissions: {
-  type: [String],
-  enum: [
+const PERMISSIONS = [
     'create',
     'read',
     'update',
     'delete',
     'manage-admins',
     'manage-sub-admins'
-  ],
-  default: ['read']
-}
-    });
+];
+router.post('/create-super-admin', async (req, res) => {
+    try {
+        const { secret, email, password, phone } = req.body;
 
-    await superAdmin.save();
+        // 🔐 Environment-level protection
+        if (secret !== process.env.SUPER_ADMIN_SECRET) {
+            return res.status(403).json({
+                success: false,
+                message: 'Invalid secret'
+            });
+        }
 
-    res.status(201).json({
-      success: true,
-      message: '✅ Super Admin created successfully'
-    });
+        const existing = await Admin.findOne({ role: 'super-admin' });
+        if (existing) {
+            return res.status(400).json({
+                success: false,
+                message: 'Super Admin already exists'
+            });
+        }
 
-  } catch (err) {
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
-  }
+        const superAdmin = new Admin({
+            email,
+            password,
+            phone,
+            role: 'super-admin',
+            permissions: {
+                type: [String],
+                permissions: PERMISSIONS, // ✅ array of strings
+
+                default: ['read']
+            }
+        });
+
+        console.log('permissions payload:', permissions);
+console.log('permissions[0] type:', typeof permissions[0]);
+
+        await superAdmin.save();
+
+        res.status(201).json({
+            success: true,
+            message: '✅ Super Admin created successfully'
+        });
+
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            message: err.message
+        });
+    }
 });
 
 
