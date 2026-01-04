@@ -4,6 +4,16 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 
 
+const PERMISSIONS = [
+  'create',
+  'read',
+  'update',
+  'delete',
+  'manage-admins',
+  'manage-sub-admins'
+];
+
+
 const adminSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
@@ -15,6 +25,10 @@ const adminSchema = new mongoose.Schema({
     resetPasswordExpiry: Date,
 
     // 🆕 ADD THESE FIELDS
+
+
+
+
     role: {
         type: String,
         enum: ['super-admin', 'sub-admin'],
@@ -27,7 +41,7 @@ const adminSchema = new mongoose.Schema({
     enum: PERMISSIONS,
     default: ['read']
   },
-  
+
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Admin',
