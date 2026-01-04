@@ -20,18 +20,14 @@ const adminSchema = new mongoose.Schema({
         enum: ['super-admin', 'sub-admin'],
         default: 'super-admin'
     },
-    permissions: {
-  type: [String],
-  enum: [
-    'create',
-    'read',
-    'update',
-    'delete',
-    'manage-admins',
-    'manage-sub-admins'
-  ],
-  default: ['read']
-},
+  
+
+     permissions: {
+    type: [String],
+    enum: PERMISSIONS,
+    default: ['read']
+  },
+  
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Admin',
